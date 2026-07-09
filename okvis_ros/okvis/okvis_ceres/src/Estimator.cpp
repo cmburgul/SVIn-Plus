@@ -54,6 +54,33 @@
 #include <okvis/ceres/SonarError.hpp>
 #include <okvis/ceres/Sonar3DOdometryError.hpp>
 #include <okvis/ceres/SpeedAndBiasError.hpp>
+
+namespace {
+// Linearly interpolate the gyro reading in imuMeasurements at time t, for the
+// DVL lever-arm correction. Mirrors the boundary-interpolation technique used
+// in okvis::ceres::ImuError::propagation.
+Eigen::Vector3d interpolateGyroAt(const okvis::ImuMeasurementDeque& imuMeasurements, const okvis::Time& t) {
+  if (imuMeasurements.empty()) {
+    return Eigen::Vector3d::Zero();
+  }
+  if (t <= imuMeasurements.front().timeStamp) {
+    return imuMeasurements.front().measurement.gyroscopes;
+  }
+  if (t >= imuMeasurements.back().timeStamp) {
+    return imuMeasurements.back().measurement.gyroscopes;
+  }
+  for (okvis::ImuMeasurementDeque::const_iterator it = imuMeasurements.begin(); it + 1 != imuMeasurements.end();
+       ++it) {
+    if (it->timeStamp <= t && t <= (it + 1)->timeStamp) {
+      double interval = ((it + 1)->timeStamp - it->timeStamp).toSec();
+      double r = (interval > 0.0) ? (t - it->timeStamp).toSec() / interval : 0.0;
+      return ((1.0 - r) * it->measurement.gyroscopes + r * (it + 1)->measurement.gyroscopes).eval();
+    }
+  }
+  return imuMeasurements.back().measurement.gyroscopes;
+}
+}  // namespace
+
 /// \brief okvis Main namespace of this package.
 namespace okvis {
 
@@ -333,10 +360,16 @@ bool Estimator::addStates(okvis::MultiFramePtr multiFrame,
               << scaled_covariance(0) << ", " << scaled_covariance(1) << ", " << scaled_covariance(2) << "] (m/s)^2";
     LOG(INFO) << "[DVL Scaling] Weight multiplier: " << std::setprecision(2) << std::fixed << (1.0 / scaling_factor) << "x";
 
+    // Gyro reading at the DVL sample's own timestamp, for the lever-arm correction.
+    Eigen::Vector3d gyroAtDvl = interpolateGyroAt(imuMeasurements, dvlMeasurements.begin()->timeStamp);
+    LOG(INFO) << "[DVL Config] Gyro @ DVL timestamp: [" << std::setprecision(6) << std::fixed
+              << gyroAtDvl(0) << ", " << gyroAtDvl(1) << ", " << gyroAtDvl(2) << "] rad/s";
+
     // DVL error and related addResidualBlock
-    std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlMeasurements.begin()->measurement.velocity, 
-                                              scaled_covariance, 
-                                              dvlParameters_.T_SV));
+    std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlMeasurements.begin()->measurement.velocity,
+                                              scaled_covariance,
+                                              dvlParameters_.T_SV,
+                                              gyroAtDvl));
 
             
     uint64_t sbId = states.sensors.at(SensorStates::Imu).at(0).at(ImuSensorStates::SpeedAndBias).id;

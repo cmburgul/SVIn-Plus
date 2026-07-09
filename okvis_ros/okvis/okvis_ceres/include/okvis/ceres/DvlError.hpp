@@ -105,6 +105,12 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
     T_SV_ = T_SV;
   }
 
+  /// \brief Set the raw gyro reading used for the lever-arm correction.
+  /// @param[in] gyroMeasurement Raw gyro reading (rad/s), uncorrected for bias.
+  void setGyroMeasurement(const Eigen::Vector3d& gyroMeasurement) {
+    gyroMeasurement_ = gyroMeasurement;
+  }
+
   // getters
   /// \brief Get the measurement.
   /// \return The measurement vector.
@@ -162,6 +168,7 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
   // the measurement
   Eigen::Vector3d velocity_m_;  ///< The velocity measurement.
   okvis::kinematics::Transformation T_SV_;  ///< Transformation from DVL to imu sensor frame.
+  Eigen::Vector3d gyroMeasurement_;  ///< Raw gyro reading (rad/s), uncorrected for bias, sampled near the DVL measurement time.
 
   // weighting related
   information_t information_;            ///< The 3x3 information matrix.
