@@ -79,11 +79,22 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
   /// @param[in] velocity_m The measurement vector (velocity in the DVL frame).
   /// @param[in] covariance_diag The diagonal of the covariance matrix (variance of the measurement).
   /// @param[in] T_SV The transformation from DVL to imu sensor frame.
-  /// @param[in] gyroMeasurement Raw gyro reading (rad/s), uncorrected for bias, sampled near the DVL measurement time.
+  /// @param[in] gyroMeasurement Raw gyro reading (rad/s), uncorrected for bias, sampled at the DVL measurement time.
+  /// @param[in] deltaR_dvl_to_frame Frozen rotation increment (Delta_q as a matrix) from t_dvl to t_frame,
+  ///            from a true multi-sample IMU preintegration (okvis::ceres::ImuError::propagation) over
+  ///            [t_dvl, t_frame], seeded with the frame's current gyro/accel bias estimate.
+  /// @param[in] accIntegral Frozen specific-force integral (acc_integral) from that same preintegration,
+  ///            expressed in the t_dvl body frame (i.e. computed with an identity-rotation start state).
+  /// @param[in] deltaT Elapsed time t_frame - t_dvl [s] (>= 0) covered by the preintegration.
+  /// @param[in] gravity_W Gravity vector in the world frame (matches okvis::ceres::ImuError's convention).
   DvlError(const Eigen::Vector3d& velocity_m,
            const Eigen::Vector3d& covariance_diag,
            const okvis::kinematics::Transformation& T_SV,
-           const Eigen::Vector3d& gyroMeasurement);
+           const Eigen::Vector3d& gyroMeasurement,
+           const Eigen::Matrix3d& deltaR_dvl_to_frame,
+           const Eigen::Vector3d& accIntegral,
+           double deltaT,
+           const Eigen::Vector3d& gravity_W);
 
   /// \brief Trivial destructor.
   virtual ~DvlError() {}
@@ -169,6 +180,10 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
   Eigen::Vector3d velocity_m_;  ///< The velocity measurement.
   okvis::kinematics::Transformation T_SV_;  ///< Transformation from DVL to imu sensor frame.
   Eigen::Vector3d gyroMeasurement_;  ///< Raw gyro reading (rad/s), uncorrected for bias, sampled near the DVL measurement time.
+  Eigen::Matrix3d deltaR_W_to_S_tdvl_to_tframe_;  ///< Frozen preintegrated rotation increment t_dvl -> t_frame.
+  Eigen::Vector3d accIntegral_;  ///< Frozen preintegrated specific-force integral over [t_dvl, t_frame].
+  double deltaT_;  ///< Elapsed time t_frame - t_dvl [s] (>= 0) covered by the preintegration.
+  Eigen::Vector3d gravity_W_;  ///< Gravity vector in the world frame.
 
   // weighting related
   information_t information_;            ///< The 3x3 information matrix.

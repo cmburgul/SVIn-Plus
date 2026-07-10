@@ -1009,31 +1009,20 @@ void ThreadedKFVio::matchingLoop() {
             continue; // Check next measurement
           }
 
-          // Case 2: If measurement is in window -> CHECK time threshold
+          // Case 2: If measurement is in window -> ACCEPT and let Estimator
+          // preintegrate IMU across the (bounded, <= one camera period) gap
+          // to the DVL timestamp instead of dropping on a fixed threshold.
           if (iter->timeStamp > lastFrameTime && iter->timeStamp <= currentFrameTime){
-            // Calculate time difference from current frame
             double time_diff = std::abs((currentFrameTime - iter->timeStamp).toSec());
-            
+
+            okvis::DVLMeasurement dvl_measurement = *iter;
+            dvlData.push_back(dvl_measurement);
+
             LOG(INFO) << std::fixed << std::setprecision(4)
-              << "Found DVL @ " << iter->timeStamp.toSec() << " s"
+              << "✓ DVL ACCEPTED @ " << iter->timeStamp.toSec() << " s"
               << " | Time diff from frame: " << time_diff << " s"
-              << " | Threshold: " << parameters_.dvl.time_threshold << " s";
+              << " | Velocity: " << dvl_measurement.measurement.velocity.transpose() << " m/s";
 
-            // Check if within time threshold
-            if (time_diff <= parameters_.dvl.time_threshold) {
-              okvis::DVLMeasurement dvl_measurement = *iter;
-
-              // Add to dvlData deque
-              dvlData.push_back(dvl_measurement);
-
-              LOG(INFO) << std::fixed << std::setprecision(3)
-                << "✓ DVL ACCEPTED - Velocity: " << dvl_measurement.measurement.velocity.transpose() << " m/s";
-            } else {
-              LOG(WARNING) << std::fixed << std::setprecision(4)
-                << "✗ DVL DROPPED - Time diff (" << time_diff << " s) exceeds threshold (" 
-                << parameters_.dvl.time_threshold << " s)";
-            }
-            
             break;
           }
           // Case 3 : If measurement is in future -> STOP

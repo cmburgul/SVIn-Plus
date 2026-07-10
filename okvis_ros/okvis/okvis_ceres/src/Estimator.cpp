@@ -365,16 +365,66 @@ bool Estimator::addStates(okvis::MultiFramePtr multiFrame,
     LOG(INFO) << "[DVL Config] Gyro @ DVL timestamp: [" << std::setprecision(6) << std::fixed
               << gyroAtDvl(0) << ", " << gyroAtDvl(1) << ", " << gyroAtDvl(2) << "] rad/s";
 
-    // DVL error and related addResidualBlock
-    std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlMeasurements.begin()->measurement.velocity,
-                                              scaled_covariance,
-                                              dvlParameters_.T_SV,
-                                              gyroAtDvl));
+    // Frame -> DVL timing gap: the accepted DVL sample generally does not land
+    // exactly at the frame timestamp. Preintegrate IMU across the gap (a true
+    // multi-sample preintegration, not a single-point approximation) using the
+    // same okvis::ceres::ImuError::propagation() that seeds the frame's own
+    // pose/speedAndBias initial guess above. propagation() only supports
+    // forward integration (t_start <= t_end), and t_dvl <= t_frame is
+    // guaranteed by the (lastFrameTime, currentFrameTime] window in
+    // ThreadedKFVio, so integrate forward from t_dvl to t_frame.
+    //
+    // The start state is nominal (identity rotation, zero velocity), seeded
+    // only with the frame's current bias estimate: the resulting rotation
+    // increment and specific-force integral don't depend on the (unknown,
+    // being-optimized) states at t_dvl/t_frame -- only on the raw IMU samples
+    // and this bias estimate -- exactly like the core IMU preintegration
+    // factor. DvlError reconstructs the DVL-time state from the frame-time
+    // parameter blocks plus these frozen preintegrated quantities.
+    okvis::kinematics::Transformation T_WS_dvlNominal;
+    T_WS_dvlNominal.setIdentity();
+    okvis::SpeedAndBias speedAndBias_dvlNominal = okvis::SpeedAndBias::Zero();
+    speedAndBias_dvlNominal.segment<3>(3) = speedAndBias.segment<3>(3);  // bg
+    speedAndBias_dvlNominal.segment<3>(6) = speedAndBias.segment<3>(6);  // ba
+
+    Eigen::Vector3d accDoubleIntegDvl, accIntegDvl;
+    double deltaTDvl = 0.0;
+    int numUsedImuForDvl = ceres::ImuError::propagation(imuMeasurements,
+                                                         imuParametersVec_.at(0),
+                                                         T_WS_dvlNominal,
+                                                         speedAndBias_dvlNominal,
+                                                         dvlMeasurements.begin()->timeStamp,  // t_dvl (start)
+                                                         states.timestamp,                    // t_frame (end)
+                                                         0,
+                                                         0,
+                                                         accDoubleIntegDvl,
+                                                         accIntegDvl,
+                                                         deltaTDvl);
+
+    Eigen::Matrix3d deltaR_dvl_to_frame = T_WS_dvlNominal.C();  // preintegrated rotation increment
+    Eigen::Vector3d gravity_W(0.0, 0.0, imuParametersVec_.at(0).g);
+    LOG(INFO) << "[DVL Config] IMU samples used for t_dvl->t_frame preintegration: " << numUsedImuForDvl;
+    LOG(INFO) << "[DVL Config] deltaT (t_frame - t_dvl): " << std::setprecision(6) << std::fixed << deltaTDvl << " s";
+    LOG(INFO) << "[DVL Config] Preintegrated acc_integral: [" << std::setprecision(6) << std::fixed
+              << accIntegDvl(0) << ", " << accIntegDvl(1) << ", " << accIntegDvl(2) << "] m/s";
+
+    if (numUsedImuForDvl < 1) {
+      LOG(WARNING) << "DVL preintegration used no IMU measurements; skipping this DVL update.";
+    } else {
+      // DVL error and related addResidualBlock
+      std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlMeasurements.begin()->measurement.velocity,
+                                                scaled_covariance,
+                                                dvlParameters_.T_SV,
+                                                gyroAtDvl,
+                                                deltaR_dvl_to_frame,
+                                                accIntegDvl,
+                                                deltaTDvl,
+                                                gravity_W));
 
             
-    uint64_t sbId = states.sensors.at(SensorStates::Imu).at(0).at(ImuSensorStates::SpeedAndBias).id;
-    mapPtr_->addResidualBlock(dvlError, NULL, poseParameterBlock, mapPtr_->parameterBlockPtr(sbId));
-  
+      uint64_t sbId = states.sensors.at(SensorStates::Imu).at(0).at(ImuSensorStates::SpeedAndBias).id;
+      mapPtr_->addResidualBlock(dvlError, NULL, poseParameterBlock, mapPtr_->parameterBlockPtr(sbId));
+    }
   }
 
   // @cmb — 3D Sonar Odometry with bracket interpolation

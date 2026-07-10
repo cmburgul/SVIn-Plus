@@ -143,8 +143,8 @@ dvl_params:
           0.0009692534251693474, 0.9999687689933204, -0.007843569709095888, 0.04599269984578925,
           5.8953233832979395e-06, 0.007843567679402313, 0.9999692387325242, 0.02026317587588274,
           0.000, 0.000, 0.000,  1.000]
-    noise_multiplier: 0.8 # Covariance scaling factor (multiplied with topic covariance). Lower = more weight to DVL. [dimensionless]
-    time_threshold: 0.025 # Maximum time difference between frame and DVL measurement [s]. Drop DVL if |t_frame - t_dvl| > threshold.
+    noise_multiplier: 1.4 # Covariance scaling factor (multiplied with topic covariance). Lower = more weight to DVL. [dimensionless]
+    time_threshold: 0.025 # Unused for now: any DVL sample within (last_frame, current_frame] is accepted and the frame->DVL gap is first-order IMU-preintegrated instead of being dropped.
 
 # 3D Sonar realtive sensor parameters
 # T_SL: transformation from 3D sonar frame to IMU frame S |  [ R_LtoS , p_LinS] | p_S = T_SL * p_L
