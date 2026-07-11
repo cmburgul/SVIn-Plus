@@ -1,19 +1,14 @@
 <<<<<<< HEAD
-# SVIn-
+# SVIn-Plus
 =======
-SVIN is a tightly coupled Sonar-Visual-Inertial-Depth formulation of Simultaneous Localization and Mapping (SLAM)
+SVIN+ is a tightly coupled Sonar-Visual-Inertial-Pressure-DVL and loosely coupled 3D Sonar formulation of Simultaneous Localization and Mapping (SLAM)
 algorithm for real-time underwater navigation. The package contains two modules:
 
-1. okvis_ros: Adaption of OKVIS (<https://github.com/ethz-asl/okvis_ros>) to fuse sonar,depth information in the tightly
+1. okvis_ros: Adaption of OKVIS (<https://github.com/ethz-asl/okvis_ros>) to fuse sonar, pressure, dvl information in the tightly
    coupled formulation.
 2. pose_graph:  Loop-closing module to enable real-time loop detection and pose-graph optimization based on the
    bag-of-binary-words library DBoW2.
 
-### !!! Note !!! ##
-
-**The main branch now uses ROS 2. Please use the ros1 branch if you need to work with ROS1. We are in process of
-figuring out how to use old sonar and data in ROS2 as they are custom topic types. Sonar and depth modes will not work
-and are disabled by default.**
 
 ### Setup Instructions ###
 
@@ -46,22 +41,11 @@ To build again use
 colcon build  --event-handlers console_direct+
 ```
 
-## Converting between ROS2 and ROS1 bags
-
-The easiest way to convert between ROS1 and ROS2 bag is using
-rosbags-convert [rosbags](https://gitlab.com/ternaris/rosbags).
-
 To install
 
 ```bash
 sudo apt install pipx
 pipx install rosbags
-```
-
-To convert ROS1 bag to ROS2 use
-
-```bash
-rosbags-convert --src <ros1 bag> --dst <ros2_bag_folder>
 ```
 
 ## Running with GoPro Dataset ## 
@@ -73,32 +57,12 @@ source install/setup.bash
 ros2 launch okvis_ros svin_gopro_uw.xml
 ```
 
-## Running on AFRL Datasets ##
+## Running on Datasets with launch files ##
 
 Run the launch file for Cave:
 
 ```bash
 source install/setup.bash
-ros2 launch okvis_ros svin_stereorig_v2.xml
+ros2 launch okvis_ros svin_aqua2_A6_uw.launch.py
 ```
 
-Or, run the launch file for Bus:
-
-```bash
-source install/setup.bash
-roslaunch okvis_ros svin_stereorig_v1.xml
-```
-
-In different terminal, run the bag file
-
-```bash
-ros2 bag play bagfile_name --clock
-```
-
-### Ground Truth ###
-
-The pseudo ground truth trajectories obtained using COLMAP are in colmap_groundtruth folder. These trajectories are only
-accurate up to scale and evaluation should be done after scaling only.
-
-Note: We plan to release the scale accurate trajectory using rig constraints soon.
->>>>>>> 8447e48 (Initial commit: SVIn-Plus)
