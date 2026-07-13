@@ -80,10 +80,13 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
   /// @param[in] covariance_diag The diagonal of the covariance matrix (variance of the measurement).
   /// @param[in] T_SV The transformation from DVL to imu sensor frame.
   /// @param[in] gyroMeasurement Raw gyro reading (rad/s), uncorrected for bias, sampled near the DVL measurement time.
+  /// @param[in] constrainZ If false, the DVL-frame Z-axis (row 2) is zeroed out of both the residual and
+  ///            the Jacobians, so this measurement only constrains DVL-frame X/Y velocity.
   DvlError(const Eigen::Vector3d& velocity_m,
            const Eigen::Vector3d& covariance_diag,
            const okvis::kinematics::Transformation& T_SV,
-           const Eigen::Vector3d& gyroMeasurement);
+           const Eigen::Vector3d& gyroMeasurement,
+           bool constrainZ = true);
 
   /// \brief Trivial destructor.
   virtual ~DvlError() {}
@@ -169,6 +172,7 @@ class DvlError : public ::ceres::SizedCostFunction<3 /* number of residuals */, 
   Eigen::Vector3d velocity_m_;  ///< The velocity measurement.
   okvis::kinematics::Transformation T_SV_;  ///< Transformation from DVL to imu sensor frame.
   Eigen::Vector3d gyroMeasurement_;  ///< Raw gyro reading (rad/s), uncorrected for bias, sampled near the DVL measurement time.
+  bool constrainZ_ = true;  ///< If false, zero out the DVL-frame Z row of the residual/Jacobians (X/Y only).
 
   // weighting related
   information_t information_;            ///< The 3x3 information matrix.

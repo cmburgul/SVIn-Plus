@@ -396,11 +396,40 @@ void VioParametersReader::readConfigFile(const std::string& filename) {
     cv::FileNode time_threshold_node = file["dvl_params"]["time_threshold"];
     if (!time_threshold_node.empty()) {
       vioParameters_.dvl.time_threshold = time_threshold_node;
-      LOG(INFO) << "DVL time_threshold: " << std::setprecision(6) << std::fixed 
+      LOG(INFO) << "DVL time_threshold: " << std::setprecision(6) << std::fixed
                 << vioParameters_.dvl.time_threshold << " s";
     } else {
       vioParameters_.dvl.time_threshold = 0.05;  // Default: 50ms
       LOG(WARNING) << "DVL time_threshold not found in config, using default: 0.05 s";
+    }
+
+    // Read use_robust_loss (toggle a Huber loss on the DVL residual)
+    cv::FileNode use_robust_loss_node = file["dvl_params"]["use_robust_loss"];
+    if (!use_robust_loss_node.empty() && parseBoolean(use_robust_loss_node, vioParameters_.dvl.use_robust_loss)) {
+      LOG(INFO) << "DVL use_robust_loss: " << (vioParameters_.dvl.use_robust_loss ? "true" : "false");
+    } else {
+      vioParameters_.dvl.use_robust_loss = false;  // Default: off, matches prior (NULL loss) behaviour
+      LOG(WARNING) << "DVL use_robust_loss not found in config, using default: false";
+    }
+
+    // Read robust_loss_delta (Huber transition point, in whitened-residual units)
+    cv::FileNode robust_loss_delta_node = file["dvl_params"]["robust_loss_delta"];
+    if (!robust_loss_delta_node.empty()) {
+      vioParameters_.dvl.robust_loss_delta = robust_loss_delta_node;
+      LOG(INFO) << "DVL robust_loss_delta: " << std::setprecision(6) << std::fixed
+                << vioParameters_.dvl.robust_loss_delta;
+    } else {
+      vioParameters_.dvl.robust_loss_delta = 1.0;  // Default: down-weight beyond ~1 sigma
+      LOG(WARNING) << "DVL robust_loss_delta not found in config, using default: 1.0";
+    }
+
+    // Read constrain_z_velocity (whether the DVL residual constrains DVL-frame Z velocity)
+    cv::FileNode constrain_z_node = file["dvl_params"]["constrain_z_velocity"];
+    if (!constrain_z_node.empty() && parseBoolean(constrain_z_node, vioParameters_.dvl.constrain_z_velocity)) {
+      LOG(INFO) << "DVL constrain_z_velocity: " << (vioParameters_.dvl.constrain_z_velocity ? "true" : "false");
+    } else {
+      vioParameters_.dvl.constrain_z_velocity = true;  // Default: on, matches prior (X/Y/Z) behaviour
+      LOG(WARNING) << "DVL constrain_z_velocity not found in config, using default: true";
     }
 
   }

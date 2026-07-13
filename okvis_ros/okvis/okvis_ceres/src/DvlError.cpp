@@ -45,70 +45,46 @@ namespace okvis {
 namespace ceres {
 
 // Construct with measurement, variance and LandmarkSubset.
-DvlError::DvlError(const Eigen::Vector3d& velocity_m, 
-                   const Eigen::Vector3d& covariance_diag, 
-                   const okvis::kinematics::Transformation& T_SV, 
-                   const Eigen::Vector3d& gyroMeasurement) {
+DvlError::DvlError(const Eigen::Vector3d& velocity_m,
+                   const Eigen::Vector3d& covariance_diag,
+                   const okvis::kinematics::Transformation& T_SV,
+                   const Eigen::Vector3d& gyroMeasurement,
+                   bool constrainZ) {
   // LOG(INFO) << "DvlError initialization";
   setMeasurement(velocity_m);
-  setInformation(cmb-desktop@Desktop:~/singularity/2_ws/svin2_ws/src/SVIn$ git status
-On branch main
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-        modified:   config/config_aqua2_A6_BBDOS26_1280_720.yaml
-        modified:   okvis_ros/okvis/okvis_ceres/include/okvis/ceres/DvlError.hpp
-        modified:   okvis_ros/okvis/okvis_ceres/src/DvlError.cpp
-        modified:   okvis_ros/okvis/okvis_ceres/src/Estimator.cpp
-
-no changes added to commit (use "git add" and/or "git commit -a")
-cmb-desktop@Desktop:~/singularity/2_ws/svin2_ws/src/SVIn$ ls -l
-total 72
-drwxrwxr-x  2 cmb-desktop cmb-desktop  4096 Feb 13 14:34 colmap_groundtruth
-drwxrwxr-x  2 cmb-desktop cmb-desktop  4096 Mar 23 18:01 config
-drwxrwxr-x  3 cmb-desktop cmb-desktop  4096 Feb 13 14:47 depth_node_py
--rw-rw-r--  1 cmb-desktop cmb-desktop  1464 Feb 13 14:34 install.md
--rw-rw-r--  1 cmb-desktop cmb-desktop 35149 Feb 13 14:34 LICENSE
-drwxrwxr-x 10 cmb-desktop cmb-desktop  4096 Feb 13 14:47 okvis_ros
-drwxrwxr-x 14 cmb-desktop cmb-desktop  4096 Feb 17 20:19 pose_graph
--rw-rw-r--  1 cmb-desktop cmb-desktop  3301 Feb 13 14:34 README.md
-drwxrwxr-x  2 cmb-desktop cmb-desktop  4096 Feb 13 14:34 rviz_config
-drwxrwxr-x  3 cmb-desktop cmb-desktop  4096 Feb 13 14:47 waterlinked_a50_ros_driver
-cmb-desktop@Desktop:~/singularity/2_ws/svin2_ws/src/SVIn$ ls -a
-.   .clang-format       config         .git        install.md  .linterconfig.yaml  pose_graph  rviz_config  waterlinked_a50_ros_driver
-..  colmap_groundtruth  depth_node_py  .gitignore  LICENSE     okvis_ros           README.md   .vscode
-cmb-desktop@Desktop:~/singularity/2_ws/svin2_ws/src/SVIn$ cat .git
-cat: .git: Is a directory);
+  setInformation(covariance_diag);
   setTransformation(T_SV);
   setGyroMeasurement(gyroMeasurement);
+  constrainZ_ = constrainZ;
 
   // --- Verification prints ---
-  LOG(INFO) << "---------- DvlError Constructor ----------";
-  LOG(INFO) << "[DvlError] Velocity measurement (DVL frame): ["
-            << std::fixed << std::setprecision(4)
-            << velocity_m_(0) << ", " << velocity_m_(1) << ", " << velocity_m_(2) << "] m/s";
-  LOG(INFO) << "[DvlError] Gyro measurement (IMU frame, uncorrected): ["
-            << std::fixed << std::setprecision(4)
-            << gyroMeasurement_(0) << ", " << gyroMeasurement_(1) << ", " << gyroMeasurement_(2) << "] rad/s";
-  LOG(INFO) << "[DvlError] T_SV lever arm r_SV: ["
-            << std::fixed << std::setprecision(4)
-            << T_SV_.r()(0) << ", " << T_SV_.r()(1) << ", " << T_SV_.r()(2) << "] m";
-  LOG(INFO) << "[DvlError] Input covariance diag (SCALED): ["
-            << std::setprecision(6) 
-            << covariance_.diagonal()(0) << ", "
-            << covariance_.diagonal()(1) << ", "
-            << covariance_.diagonal()(2) << "] (m/s)^2";
-  LOG(INFO) << "[DvlError] Information matrix diag (1/cov): ["
-            << std::setprecision(2)
-            << information_.diagonal()(0) << ", "
-            << information_.diagonal()(1) << ", "
-            << information_.diagonal()(2) << "]";
-  LOG(INFO) << "[DvlError] Square-root info diag: ["
-            << std::setprecision(2)
-            << _squareRootInformation.diagonal()(0) << ", "
-            << _squareRootInformation.diagonal()(1) << ", "
-            << _squareRootInformation.diagonal()(2) << "]";
-  LOG(INFO) << "==========================================\n";
+  // LOG(INFO) << "---------- DvlError Constructor ----------";
+  // LOG(INFO) << "[DvlError] Velocity measurement (DVL frame): ["
+  //           << std::fixed << std::setprecision(4)
+  //           << velocity_m_(0) << ", " << velocity_m_(1) << ", " << velocity_m_(2) << "] m/s";
+  // LOG(INFO) << "[DvlError] Gyro measurement (IMU frame, uncorrected): ["
+  //           << std::fixed << std::setprecision(4)
+  //           << gyroMeasurement_(0) << ", " << gyroMeasurement_(1) << ", " << gyroMeasurement_(2) << "] rad/s";
+  // LOG(INFO) << "[DvlError] T_SV lever arm r_SV: ["
+  //           << std::fixed << std::setprecision(4)
+  //           << T_SV_.r()(0) << ", " << T_SV_.r()(1) << ", " << T_SV_.r()(2) << "] m";
+  // LOG(INFO) << "[DvlError] constrainZ: " << (constrainZ_ ? "true (X/Y/Z)" : "false (X/Y only)");
+  // LOG(INFO) << "[DvlError] Input covariance diag (SCALED): ["
+  //           << std::setprecision(6) 
+  //           << covariance_.diagonal()(0) << ", "
+  //           << covariance_.diagonal()(1) << ", "
+  //           << covariance_.diagonal()(2) << "] (m/s)^2";
+  // LOG(INFO) << "[DvlError] Information matrix diag (1/cov): ["
+  //           << std::setprecision(2)
+  //           << information_.diagonal()(0) << ", "
+  //           << information_.diagonal()(1) << ", "
+  //           << information_.diagonal()(2) << "]";
+  // LOG(INFO) << "[DvlError] Square-root info diag: ["
+  //           << std::setprecision(2)
+  //           << _squareRootInformation.diagonal()(0) << ", "
+  //           << _squareRootInformation.diagonal()(1) << ", "
+  //           << _squareRootInformation.diagonal()(2) << "]";
+  // LOG(INFO) << "==========================================\n";
 }
 
 void DvlError::setInformation(const Eigen::Vector3d& covariance_diag) {
@@ -174,10 +150,10 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
   Eigen::Map<Eigen::Vector3d> weighted_error(residuals);
   weighted_error = _squareRootInformation * error;
 
-  LOG(INFO) << "[DvlError::Evaluate] v_dvl_pred: [" << vel_in_V_predicted.transpose() << "]";
-  LOG(INFO) << "[DvlError::Evaluate] velocity_m_: [" << velocity_m_.transpose() << "]";
-  LOG(INFO) << "[DvlError::Evaluate] raw error:   [" << error.transpose() << "] m/s";
-  LOG(INFO) << "[DvlError::Evaluate] weighted r:  [" << weighted_error.transpose() << "]";
+  // LOG(INFO) << "[DvlError::Evaluate] v_dvl_pred: [" << vel_in_V_predicted.transpose() << "]";
+  // LOG(INFO) << "[DvlError::Evaluate] velocity_m_: [" << velocity_m_.transpose() << "]";
+  // LOG(INFO) << "[DvlError::Evaluate] raw error:   [" << error.transpose() << "] m/s";
+  // LOG(INFO) << "[DvlError::Evaluate] weighted r:  [" << weighted_error.transpose() << "]";
 
   // compute Jacobian...
 
@@ -223,6 +199,25 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
       Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>> J1min(jacobiansMinimal[1]);
       J1min.setZero();
       J1min.block<3,3>(0,0) = -_squareRootInformation * R_S_to_V * R_W_to_S;
+  }
+
+  // If Z is not to be constrained, zero out row 2 (the DVL-frame Z component)
+  // of the residual and every populated Jacobian, so this measurement only
+  // contributes to X/Y and carries zero cost/gradient along Z.
+  if (!constrainZ_) {
+    weighted_error(2) = 0.0;
+    if (jacobians != NULL && jacobians[0] != NULL) {
+      Eigen::Map<Eigen::Matrix<double, 3, 7, Eigen::RowMajor>>(jacobians[0]).row(2).setZero();
+    }
+    if (jacobiansMinimal != NULL && jacobiansMinimal[0] != NULL) {
+      Eigen::Map<Eigen::Matrix<double, 3, 6, Eigen::RowMajor>>(jacobiansMinimal[0]).row(2).setZero();
+    }
+    if (jacobians != NULL && jacobians[1] != NULL) {
+      Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>>(jacobians[1]).row(2).setZero();
+    }
+    if (jacobiansMinimal != NULL && jacobiansMinimal[1] != NULL) {
+      Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>>(jacobiansMinimal[1]).row(2).setZero();
+    }
   }
 
   return true;

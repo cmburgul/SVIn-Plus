@@ -634,6 +634,9 @@ class Estimator : public VioBackendInterface {
   std::shared_ptr<::ceres::LossFunction> cauchyLossFunctionPtr_;  ///< Cauchy loss.
   std::shared_ptr<::ceres::LossFunction> huberLossFunctionPtr_;   ///< Huber loss.
 
+  // loss function for the DVL residual (null unless dvlParameters_.use_robust_loss is set; see addDVL())
+  std::shared_ptr<::ceres::LossFunction> dvlLossFunctionPtr_;  ///< Huber loss for DVL, toggled/tuned via config.
+
   // the marginalized error term
   std::shared_ptr<ceres::MarginalizationError> marginalizationErrorPtr_;  ///< The marginalisation class
   ::ceres::ResidualBlockId marginalizationResidualId_;                    ///< Remembers the marginalisation object's Id

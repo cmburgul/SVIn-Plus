@@ -216,6 +216,9 @@ struct DVLSensorParameters {
   okvis::kinematics::Transformation T_SV;  ///< Transformation from IMU frame (IMU frame S) to DVL sensor (DVL frame V).
   double noise_multiplier;  ///< Covariance scaling factor (multiplied with topic covariance). Lower = more weight to DVL.
   double time_threshold;  ///< Maximum time difference between frame and DVL measurement [s]. Drop if exceeds threshold.
+  bool use_robust_loss;  ///< If true, wrap the DVL residual in a Huber loss to down-weight noisy/outlier samples.
+  double robust_loss_delta;  ///< Huber loss transition point, in whitened-residual (sigma) units. Only used if use_robust_loss.
+  bool constrain_z_velocity;  ///< If false, the DVL-frame Z-axis velocity is not constrained (X/Y only).
 };
 
 /*!

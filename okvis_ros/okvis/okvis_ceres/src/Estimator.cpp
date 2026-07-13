@@ -133,6 +133,12 @@ int Estimator::addDepth(const DepthSensorParameters& depthParameters) {
 // Add DVL to the configuration.
 int Estimator::addDVL(const DVLSensorParameters& dvlParameters) {
   dvlParameters_ = dvlParameters;
+  if (dvlParameters_.use_robust_loss) {
+    dvlLossFunctionPtr_.reset(new ::ceres::HuberLoss(dvlParameters_.robust_loss_delta));
+    LOG(INFO) << "DVL residual: using Huber loss, delta=" << dvlParameters_.robust_loss_delta;
+  } else {
+    dvlLossFunctionPtr_.reset();
+  }
   return 0;
 }
 
@@ -365,15 +371,25 @@ bool Estimator::addStates(okvis::MultiFramePtr multiFrame,
     LOG(INFO) << "[DVL Config] Gyro @ DVL timestamp: [" << std::setprecision(6) << std::fixed
               << gyroAtDvl(0) << ", " << gyroAtDvl(1) << ", " << gyroAtDvl(2) << "] rad/s";
 
+    // If Z is not constrained, also zero the raw Z velocity fed into the residual
+    // (log/debug clarity only -- DvlError already zeroes row 2 of the residual
+    // and every Jacobian unconditionally when constrainZ is false, so this has
+    // no effect on the optimization itself).
+    Eigen::Vector3d dvlVelocityForResidual = dvlMeasurements.begin()->measurement.velocity;
+    if (!dvlParameters_.constrain_z_velocity) {
+      dvlVelocityForResidual.z() = 0.0;
+    }
+
     // DVL error and related addResidualBlock
-    std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlMeasurements.begin()->measurement.velocity,
+    std::shared_ptr<ceres::DvlError> dvlError(new ceres::DvlError(dvlVelocityForResidual,
                                               scaled_covariance,
                                               dvlParameters_.T_SV,
-                                              gyroAtDvl));
+                                              gyroAtDvl,
+                                              dvlParameters_.constrain_z_velocity));
 
             
     uint64_t sbId = states.sensors.at(SensorStates::Imu).at(0).at(ImuSensorStates::SpeedAndBias).id;
-    mapPtr_->addResidualBlock(dvlError, NULL, poseParameterBlock, mapPtr_->parameterBlockPtr(sbId));
+    mapPtr_->addResidualBlock(dvlError, dvlLossFunctionPtr_.get(), poseParameterBlock, mapPtr_->parameterBlockPtr(sbId));
   
   }
 
