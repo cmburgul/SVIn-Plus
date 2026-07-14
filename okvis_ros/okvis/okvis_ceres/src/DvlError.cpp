@@ -118,6 +118,7 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
                                              parameters[0][4],   // qy
                                              parameters[0][5])   // qz
                          .toRotationMatrix();
+
   Eigen::Matrix3d R_W_to_S = R_S_to_W.transpose(); // R_World→IMU 
 
   // Extract velocity in world frame from parameters[1] = [vx, vy, vz, bg, ba] ---
@@ -137,8 +138,8 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
   // jacobians[1] below), so it never tries to correct the gyro bias itself.
   Eigen::Vector3d omega_S = gyroMeasurement_ - bg;
 
-  // Predict DVL velocity: v_hat_in_V = R_S_to_V * (R_W_to_S * v_W + omega_S x r_SV)
-  Eigen::Vector3d v_S = R_W_to_S * v_W;  // velocity in IMU frame
+  // Predict DVL velocity: v_hat_in_V = R_S_to_V * (R_S_to_W^T * v_W + omega_S x p_V_in_S)
+  Eigen::Vector3d v_S = R_S_to_W.transpose() * v_W;  // velocity in IMU frame
   Eigen::Vector3d v_S_total = v_S + omega_S.cross(p_V_in_S);  // + lever-arm correction
   Eigen::Vector3d vel_in_V_predicted = R_S_to_V * v_S_total;
 
@@ -157,33 +158,79 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
 
   // compute Jacobian...
 
-  // Rotation Jacobian ∂e/∂θ = -R_S_to_V * [R_W_to_S * v_W]×
-  // (lever-arm term omega_S x r_SV is a body-frame quantity and does not
+  // -------------
+  // Pose Jacobian
+  // Pose parameter block:
+  // parameters[0] = [p_x, p_y, p_z, q_x, q_y, q_z, q_w]
+  //
+  // Ambient(Full) pose size:  7
+  // Minimal(Error) pose size:  6
+  //
+  // Minimal increment convention used by the current OKVIS PoseManifold:
+  //
+  //   q_new = dq * q_old 
+  //   Equivalently:
+  //   R_S_to_W_new = Exp(delta_theta_W) * R_S_to_W 
+  //
+  // The DVL residual does not depend on the pose position, so the first
+  // three columns of J0_minimal are zero.
+
+  // Rotation Jacobian 
+  // J_theta_Minimal ∂e/∂θ = -sqrtInformation * R_S_to_V * R_S_to_W^T * [v_W]×
+  // (lever-arm term omega_S x p_V_in_S is a body-frame quantity and does not
   // depend on the global attitude perturbation, so v_S here intentionally
   // excludes it.)
-  Eigen::Matrix3d v_S_skew;
-  v_S_skew <<        0,      -v_S(2),  v_S(1),
-                v_S(2),            0,   -v_S(0),
-                -v_S(1),     v_S(0),           0;  
 
-  // Eigen::Matrix3d J_rotation = -R_S_to_V * v_S_skew;  // ∂e/∂θ
+  Eigen::Matrix3d v_W_skew;
+  v_W_skew <<        0,      -v_W(2),  v_W(1),
+                v_W(2),            0,   -v_W(0),
+                -v_W(1),     v_W(0),           0;  
 
-  // jacobians[0] — 3×7, rotation-only (position cols stay 0)
-  if (jacobians != NULL && jacobians[0] != NULL) {
-      Eigen::Map<Eigen::Matrix<double, 3, 7, Eigen::RowMajor>> J0(jacobians[0]);
-      J0.setZero();
-      J0.block<3,3>(0,3) = -_squareRootInformation * R_S_to_V * v_S_skew;  // cols 3-5 only
+  // Eigen::Matrix3d J_rotation_minimal = -R_S_to_V * R_S_to_W^T * v_W_skew;  // ∂e/∂θ
+  Eigen::Matrix3d J_rotation_minimal = -_squareRootInformation * R_S_to_V * R_S_to_W.transpose() * v_W_skew;
+
+  // -----------------------------------------------------------------------------
+  // Construct the complete 3x6 minimal pose Jacobian
+  // -----------------------------------------------------------------------------
+  //   0  -> delta_p_x
+  //   1  -> delta_p_y
+  //   2  -> delta_p_z
+  //   3  -> delta_theta_W_x
+  //   4  -> delta_theta_W_y
+  //   5  -> delta_theta_W_z
+
+  // jacobiansMinimal[0] — 3×6 - rotation-only (position cols stay 0)
+  Eigen::Matrix<double, 3, 6, Eigen::RowMajor> J0_minimal;
+  J0_minimal.setZero();
+  J0_minimal.block<3,3>(0,3) = J_rotation_minimal;  // cols 3-5 only
+  
+  if (jacobiansMinimal != NULL && jacobiansMinimal[0] != NULL) {
+    Eigen::Map<Eigen::Matrix<double, 3, 6, Eigen::RowMajor>> J0min(jacobiansMinimal[0]);
+    J0min = J0_minimal;
   }
 
-  // jacobiansMinimal[0] — 3×6
-  if (jacobiansMinimal != NULL && jacobiansMinimal[0] != NULL) {
-      Eigen::Map<Eigen::Matrix<double, 3, 6, Eigen::RowMajor>> J0min(jacobiansMinimal[0]);
-      J0min.setZero();
-      J0min.block<3,3>(0,3) = -_squareRootInformation * R_S_to_V * v_S_skew;
+  // Ambient Jacobian - lift the minimal Jacobian to the full 7D pose parameterization (position + quaternion)
+  // jacobians[0] — the 3x7 ambient Jacobian Ceres itself calls Evaluate()
+  // with. Lift the minimal Jacobian into ambient (qx,qy,qz,qw) space so
+  // Ceres's internal tangent_matrix = ambient_matrix * PlusJacobian(x)
+  // recovers J0_minimal exactly (same technique as ReprojectionError.hpp).
+  if (jacobians != NULL && jacobians[0] != NULL) {
+    Eigen::Matrix<double, 6, 7, Eigen::RowMajor> J_lift;
+    PoseManifold::liftJacobian(parameters[0], J_lift.data());
+
+    Eigen::Map<Eigen::Matrix<double, 3, 7, Eigen::RowMajor>> J0(jacobians[0]);
+    J0 = J0_minimal * J_lift;
   }
 
   // Velocity Jacobian ∂e/∂v = -R_S_to_V * R_W_to_S
   // Eigen::Matrix3d J_velocity = -R_S_to_V * R_W_to_S;
+
+  // jacobiansMinimal[1] — 3×9 (same as jacobians[1], SpeedAndBias is already minimal)
+  if (jacobiansMinimal != NULL && jacobiansMinimal[1] != NULL) {
+      Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>> J1min(jacobiansMinimal[1]);
+      J1min.setZero();
+      J1min.block<3,3>(0,0) = -_squareRootInformation * R_S_to_V * R_W_to_S;
+  }
 
   // jacobians[1] — 3×9, velocity-only (bg cols intentionally left 0: bg is
   // used above to correct the gyro reading, but this residual should not
@@ -192,13 +239,6 @@ bool DvlError::EvaluateWithMinimalJacobians(double const* const* parameters,
       Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>> J1(jacobians[1]);
       J1.setZero();
       J1.block<3,3>(0,0) = -_squareRootInformation * R_S_to_V * R_W_to_S;  // cols 0-2 only
-  }
-
-  // jacobiansMinimal[1] — 3×9 (same as jacobians[1], SpeedAndBias is already minimal)
-  if (jacobiansMinimal != NULL && jacobiansMinimal[1] != NULL) {
-      Eigen::Map<Eigen::Matrix<double, 3, 9, Eigen::RowMajor>> J1min(jacobiansMinimal[1]);
-      J1min.setZero();
-      J1min.block<3,3>(0,0) = -_squareRootInformation * R_S_to_V * R_W_to_S;
   }
 
   // If Z is not to be constrained, zero out row 2 (the DVL-frame Z component)

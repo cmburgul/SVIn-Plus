@@ -136,27 +136,27 @@ depth_params:
 
 # DVL sensor parameters
 # T_SV: transformation from dvl frame to IMU frame S |  [ R_VtoS , p_VinS] | p_S = T_SV * p_V 
-isDVLUsed: false
+isDVLUsed: true
 dvl_params:
     # For Barbados 26 Carlisle-bay dataset only
     T_SV:
-        [0.999999530256411, -0.0009692698500854004, 1.707265572108268e-06, -0.22191183031156242,
-          0.0009692534251693474, 0.9999687689933204, -0.007843569709095888, 0.04599269984578925,
-          5.8953233832979395e-06, 0.007843567679402313, 0.9999692387325242, 0.02026317587588274,
-          0.000, 0.000, 0.000,  1.000]
+        # [0.999999530256411, -0.0009692698500854004, 1.707265572108268e-06, -0.22191183031156242,
+        #   0.0009692534251693474, 0.9999687689933204, -0.007843569709095888, 0.04599269984578925,
+        #   5.8953233832979395e-06, 0.007843567679402313, 0.9999692387325242, 0.02026317587588274,
+        #   0.000, 0.000, 0.000,  1.000]
     # Optimized T_SV for A6_BBDOS26 dataset
     # T_SV:
-    #     [0.998719798121, 0.049818734399, -0.008766900466, -0.221911830312,
-    #      -0.049775375001, 0.998747434300, 0.005096520613, 0.045992699846,
-    #       0.009009821554, -0.004653620279, 0.999948582145, 0.020263175876,
-    #       0.000, 0.000, 0.000,  1.000]      
+        [0.998719798121, 0.049818734399, -0.008766900466, -0.221911830312,
+         -0.049775375001, 0.998747434300, 0.005096520613, 0.045992699846,
+          0.009009821554, -0.004653620279, 0.999948582145, 0.020263175876,
+          0.000, 0.000, 0.000,  1.000]      
     # For greece dataset only 
     # T_SV:
     #     [0.999901567168, 0.000757940292, -0.014010050004, -0.221911830312,
     #         0.001437020208, 0.987756333573, 0.155997950178, 0.045992699846,
     #         0.013956752758, -0.156002727583, 0.987658016744, 0.020263175876,
     #         0.000, 0.000, 0.000,  1.000]
-    noise_multiplier: 1.4 # Covariance scaling factor (multiplied with topic covariance). Lower = more weight to DVL. [dimensionless]
+    noise_multiplier: 1.2 # Covariance scaling factor (multiplied with topic covariance). Lower = more weight to DVL. [dimensionless]
     time_threshold: 0.025 # Maximum time difference between frame and DVL measurement [s]. Drop DVL if |t_frame - t_dvl| > threshold.
     use_robust_loss: false # If true, wrap the DVL residual in a Huber loss to down-weight noisy/outlier samples instead of trusting them fully.
     robust_loss_delta: 1.0 # Huber loss transition point, in whitened-residual (sigma) units. Only used if use_robust_loss is true.
